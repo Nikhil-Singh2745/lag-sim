@@ -1,0 +1,46 @@
+# Rust build output 
+**/target/
+**/*.rs.bk
+
+# Node/Vite 
+**/node_modules/
+**/dist/
+**/.vite/
+**/*.log
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+
+# Env / secrets 
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.crt
+**/*.pfx
+**/*.p12
+**/*secret*
+**/*secrets*
+**/*token*
+**/*password*
+
+# OS junk
+.DS_Store
+**/.DS_Store
+Thumbs.db
+**/Thumbs.db
+
+# Editor/IDE
+.idea/
+**/.idea/
+.vscode/
+**/.vscode/
+*.swp
+*.swo
+*~
+
+# Misc caches
+**/.cache/
+**/.parcel-cache/
+**/.turbo/
