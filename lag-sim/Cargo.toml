@@ -1,0 +1,10 @@
+[package]
+name = "lag-sim"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+rand = "0.8"
+sha1 = "0.10"
+base64 = "0.22"
