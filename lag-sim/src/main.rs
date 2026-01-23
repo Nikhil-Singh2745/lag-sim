@@ -331,20 +331,103 @@ async fn pipe_ws_frames(reader: &mut (impl AsyncReadExt + Unpin), writer: &mut (
     }
 }
 
-// async fn read_ws_frame(reader: &mut (impl AsyncReadExt + Unpin)) -> Option<Vec<u8>> {
-//     let mut head = [0u8; 2];
-//     if reader.read_exact(&mut head).await.is_err() {
-//         return None;
-//     }
-//     let mut len = (head[1] & 0x7F) as usize;
-//     let masked = (head[1] & 0x80) != 0;
-//     let mut extra = vec![];
-//     if len == 126 {
-//         let mut x = [0u8; 2];
-//         if reader.read_exact(&mut x).await.is_err() {
-//             return None;
-//         }
-//         len = u16::from_be_bytes(x) as usize;
-//         extra.extend_from_slice(&x);
-//     } 
+async fn read_ws_frame(reader: &mut (impl AsyncReadExt + Unpin)) -> Option<Vec<u8>> {
+    let mut head = [0u8; 2];
+    if reader.read_exact(&mut head).await.is_err() {
+        return None;
+    }
+    let mut len = (head[1] & 0x7F) as usize;
+    let masked = (head[1] & 0x80) != 0;
+    let mut extra = vec![];
+    if len == 126 {
+        let mut x = [0u8; 2];
+        if reader.read_exact(&mut x).await.is_err() {
+            return None;
+        }
+        len = u16::from_be_bytes(x) as usize;
+        extra.extend_from_slice(&x);
+    } else if len == 127 {
+        let mut x = [0u8; 8];
+        if reader.read_exact(&mut x).await.is_err() {
+            return None;
+        }
+        len = u64::from_be_bytes(x) as usize;
+        extra.extend_from_slice(&x);
+    }
+    let mut mask = [0u8; 4];
+    if masked {
+        if reader.read_exact(&mut mask).await.is_err() {
+            return None;
+        }
+    }
+    let mut payload = vec![0u8; len];
+    if len > 0 && reader.read_exact(&mut payload).await.is_err() {
+        return None;
+    }
+    let mut out = vec![head[0], head[1]];
+    out.extend_from_slice(&extra);
+    if masked {
+        out.extend_from_slice(&mask);
+    }
+    out.extend_from_slice(&payload);
+    Some(out)
+}
 
+async fn apply_drop(config: &Arc<Mutex<LagConfig>>, stats: &Arc<Mutex<Stats>>) -> bool {
+    let c = config.lock().await.clone();
+    let drop = {
+        let mut rng = rand::thread_rng();
+        let mut d = rng.gen_range(0..100) < c.drop_pct as u32;
+        if c.chaos && rng.gen_bool(0.03) {
+            d = true;
+        }
+        d
+    };
+    if drop {
+        let mut s = stats.lock().await;
+        s.packets_dropped += 1;
+    }
+    drop
+}
+
+async fn apply_delay(config: &Arc<Mutex<LagConfig>>, stats: &Arc<Mutex<Stats>>, bytes: u64) {
+    let c = config.lock().await.clone();
+    let delay = {
+        let mut d = c.latency_ms;
+        if c.chaos {
+            let mut rng = rand::thread_rng();
+            if rng.gen_bool(0.02) {
+                d += rng.gen_range(1000..5000);
+            }
+        }
+        d
+    };
+    if delay > 0 {
+        tokio::time::sleep(Duration::from_millis(delay)).await;
+        let mut s = stats.lock().await;
+        s.bytes_delayed += bytes;
+    }
+}
+
+async fn apply_bandwidth(config: &Arc<Mutex<LagConfig>>, bytes: u64) {
+    let c = config.lock().await.clone();
+    let kbps = c.bandwidth_kbps.max(1);
+    let millis = (bytes as f64 / (kbps as f64 * 1024.0)) * 1000.0;
+    if millis > 1.0 {
+        tokio::time::sleep(Duration::from_millis(millis as u64)).await;
+    }
+}
+
+fn random_goofy() -> String {
+    let msgs = [
+        "NETWORK IS HAVING A BAD DAY",
+        "PACKETS ARE CRYING",
+        "LATENCY OVER 9000ms",
+        "ROUTERS ARE SCREAMING",
+        "BIT FLIPS FOR FUN",
+        "YOU BROKE THE INTERNET",
+        "CHAOS IS A PROTOCOL",
+    ];
+    let mut rng = rand::thread_rng();
+    msgs[rng.gen_range(0..msgs.len())].to_string()
+}
