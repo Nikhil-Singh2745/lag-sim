@@ -312,5 +312,39 @@ async fn pipe_laggy(reader: &mut (impl AsyncReadExt + Unpin), writer: &mut (impl
         }
     }
 }
-// To do list for next time : implement pipe_ws_frames function, currently it's just a placeholder, it doesn't do any lag simulation for websocket frames.
-// Also need to implement proper websocket frame parsing and handling and lag simulation logic for that.
+
+async fn pipe_ws_frames(reader: &mut (impl AsyncReadExt + Unpin), writer: &mut (impl AsyncWriteExt + Unpin), config: Arc<Mutex<LagConfig>>, stats: Arc<Mutex<Stats>>) {
+    loop {
+        let frame = read_ws_frame(reader).await;
+        if frame.is_none() {
+            break;
+        }
+        let data = frame.unwrap();
+        if apply_drop(&config, &stats).await {
+            continue;
+        }
+        apply_delay(&config, &stats, data.len() as u64).await;
+        apply_bandwidth(&config, data.len() as u64).await;
+        if writer.write_all(&data).await.is_err() {
+            break;
+        }
+    }
+}
+
+// async fn read_ws_frame(reader: &mut (impl AsyncReadExt + Unpin)) -> Option<Vec<u8>> {
+//     let mut head = [0u8; 2];
+//     if reader.read_exact(&mut head).await.is_err() {
+//         return None;
+//     }
+//     let mut len = (head[1] & 0x7F) as usize;
+//     let masked = (head[1] & 0x80) != 0;
+//     let mut extra = vec![];
+//     if len == 126 {
+//         let mut x = [0u8; 2];
+//         if reader.read_exact(&mut x).await.is_err() {
+//             return None;
+//         }
+//         len = u16::from_be_bytes(x) as usize;
+//         extra.extend_from_slice(&x);
+//     } 
+
