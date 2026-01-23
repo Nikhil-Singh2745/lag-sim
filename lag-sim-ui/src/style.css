@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: radial-gradient(circle at 20% 20%, #2d6bff 0%, #000 55%) , radial-gradient(circle at 80% 40%, #ff3ccf 0%, #000 60%);
+  background-blend-mode: screen;
+}
